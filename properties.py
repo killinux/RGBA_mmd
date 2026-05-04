@@ -73,6 +73,39 @@ class RGBAMMDSettings(bpy.types.PropertyGroup):
     )
     last_status: StringProperty(default="")
 
+    # Spring simulation parameters
+    sim_spring_k: FloatProperty(
+        name="Spring K",
+        description="弹簧刚度：越低越松摆幅越大",
+        default=80.0, min=1.0, max=500.0,
+    )
+    sim_damping: FloatProperty(
+        name="Damping",
+        description="阻尼系数：越低振荡越久越弹",
+        default=6.0, min=0.1, max=50.0,
+    )
+    sim_mass: FloatProperty(
+        name="Mass",
+        description="质量：越大惯性越大反应越迟钝",
+        default=1.0, min=0.1, max=10.0,
+    )
+    sim_scale: FloatProperty(
+        name="Scale",
+        description="放大倍数：直接控制弹跳可见幅度",
+        default=3.0, min=0.1, max=10.0,
+    )
+    sim_parent_bone: StringProperty(
+        name="Parent Bone",
+        description="驱动弹跳的父骨骼（留空自动检测上半身2）",
+        default="",
+    )
+    export_path: StringProperty(
+        name="Export Path",
+        description="PMX导出路径",
+        default="",
+        subtype='FILE_PATH',
+    )
+
 
 def register():
     bpy.utils.register_class(RGBAMMDSettings)

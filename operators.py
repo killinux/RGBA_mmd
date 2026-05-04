@@ -160,7 +160,209 @@ class RGBAMMD_OT_remove(Operator):
         return {'FINISHED'}
 
 
-_classes = (RGBAMMD_OT_detect, RGBAMMD_OT_apply, RGBAMMD_OT_remove)
+class RGBAMMD_OT_spring_sim(Operator):
+    bl_idname = "rgba_mmd.spring_sim"
+    bl_label = "Spring Simulate"
+    bl_description = "数学弹簧模拟：将弹跳效果烘焙到胸部骨骼关键帧（推荐方式）"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        import math
+        s = context.scene.rgba_mmd
+        model, root, arm = _get_model_or_report(self, context)
+        if arm is None:
+            # fallback: find any armature
+            arm = next((o for o in bpy.data.objects if o.type == "ARMATURE"), None)
+            if arm is None:
+                self.report({'ERROR'}, "No armature found.")
+                return {'CANCELLED'}
+
+        scn = context.scene
+        if arm.animation_data is None or arm.animation_data.action is None:
+            self.report({'ERROR'}, "No animation on armature. Load a VMD first.")
+            return {'CANCELLED'}
+
+        # find parent bone
+        parent_name = s.sim_parent_bone.strip()
+        if not parent_name:
+            for cand in ("上半身2", "上半身", "Upper body 2", "Upper Body 2"):
+                if cand in arm.pose.bones:
+                    parent_name = cand
+                    break
+        if not parent_name or parent_name not in arm.pose.bones:
+            self.report({'ERROR'}, f"Parent bone '{parent_name}' not found.")
+            return {'CANCELLED'}
+
+        # find bust bones
+        bust_bones = rig_builder.detect_bust_bones(arm)
+        if not bust_bones:
+            self.report({'ERROR'}, "No bust bones detected.")
+            return {'CANCELLED'}
+
+        parent_bone = arm.pose.bones[parent_name]
+        fr = arm.animation_data.action.frame_range
+        frame_start = int(fr[0])
+        frame_end = int(fr[1])
+
+        # record parent rotation per frame
+        frames = list(range(frame_start, frame_end + 1))
+        px, py, pz = [], [], []
+        for f in frames:
+            scn.frame_set(f)
+            bpy.context.view_layer.update()
+            mat = arm.matrix_world @ parent_bone.matrix
+            rot = mat.to_euler()
+            px.append(rot.x)
+            py.append(rot.y)
+            pz.append(rot.z)
+
+        # spring simulation
+        K = s.sim_spring_k
+        D = s.sim_damping
+        M = s.sim_mass
+        SC = s.sim_scale
+        DT = 1.0 / (scn.render.fps or 30)
+
+        def spring_sim(targets):
+            pos = targets[0]
+            vel = 0.0
+            deltas = []
+            for t in targets:
+                force = K * (t - pos) - D * vel
+                vel += (force / M) * DT
+                pos += vel * DT
+                deltas.append((pos - t) * SC)
+            return deltas
+
+        dx = spring_sim(px)
+        dz = spring_sim(pz)
+
+        # apply to bust bones
+        count = 0
+        for bone_name, side in bust_bones:
+            bone = arm.pose.bones[bone_name]
+            bone.rotation_mode = 'XYZ'
+            for i, f in enumerate(frames):
+                bone.rotation_euler.x = dx[i]
+                bone.rotation_euler.y = 0
+                bone.rotation_euler.z = dz[i]
+                bone.keyframe_insert(data_path="rotation_euler", frame=f)
+            count += 1
+
+        max_dx = max(abs(v) for v in dx)
+        max_dz = max(abs(v) for v in dz)
+        s.last_status = f"Spring sim: {count} bones, {len(frames)} frames, max Δx={math.degrees(max_dx):.1f}° Δz={math.degrees(max_dz):.1f}°"
+        self.report({'INFO'}, s.last_status)
+        return {'FINISHED'}
+
+
+class RGBAMMD_OT_clear_sim(Operator):
+    bl_idname = "rgba_mmd.clear_sim"
+    bl_label = "Clear Simulation"
+    bl_description = "清除胸部骨骼上的弹簧模拟关键帧"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        s = context.scene.rgba_mmd
+        arm = next((o for o in bpy.data.objects if o.type == "ARMATURE"), None)
+        if arm is None or arm.animation_data is None:
+            self.report({'ERROR'}, "No armature or animation.")
+            return {'CANCELLED'}
+
+        action = arm.animation_data.action
+        bust_bones = rig_builder.detect_bust_bones(arm)
+        removed = 0
+        for bone_name, side in bust_bones:
+            for axis in range(3):
+                dp = f'pose.bones["{bone_name}"].rotation_euler'
+                fc = action.fcurves.find(dp, index=axis)
+                if fc:
+                    action.fcurves.remove(fc)
+                    removed += 1
+            bone = arm.pose.bones[bone_name]
+            bone.rotation_mode = 'XYZ'
+            bone.rotation_euler = (0, 0, 0)
+
+        s.last_status = f"Cleared {removed} fcurves from {len(bust_bones)} bust bones"
+        self.report({'INFO'}, s.last_status)
+        return {'FINISHED'}
+
+
+class RGBAMMD_OT_export_pmx(Operator):
+    bl_idname = "rgba_mmd.export_pmx"
+    bl_label = "Export PMX"
+    bl_description = "导出带RGBA物理的PMX文件（可在MMD中使用）"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        import os
+        try:
+            from mmd_tools.core.model import Model
+            from mmd_tools.core.pmx.exporter import export as pmx_export
+        except ImportError:
+            self.report({'ERROR'}, "mmd_tools not installed.")
+            return {'CANCELLED'}
+
+        s = context.scene.rgba_mmd
+        path = bpy.path.abspath(s.export_path.strip())
+        if not path or not path.lower().endswith('.pmx'):
+            self.report({'ERROR'}, "Set a valid .pmx export path first.")
+            return {'CANCELLED'}
+
+        root = rig_builder.find_mmd_root(context)
+        if root is None:
+            self.report({'ERROR'}, "No MMD model found.")
+            return {'CANCELLED'}
+
+        model = Model(root)
+        pmx_export(
+            filepath=path, scale=1.0, root=root,
+            armature=model.armature(),
+            meshes=list(model.meshes()),
+            rigid_bodies=list(model.rigidBodies()),
+            joints=list(model.joints()),
+            copy_textures=False, sort_materials=False,
+            disable_specular=False, sort_vertices='NONE',
+        )
+
+        size = os.path.getsize(path)
+        rb = len(list(model.rigidBodies()))
+        jt = len(list(model.joints()))
+        s.last_status = f"Exported: {os.path.basename(path)} ({size/1024:.0f}KB, {rb} rigids, {jt} joints)"
+        self.report({'INFO'}, s.last_status)
+        return {'FINISHED'}
+
+
+class RGBAMMD_OT_toggle_rigid_vis(Operator):
+    bl_idname = "rgba_mmd.toggle_rigid_vis"
+    bl_label = "Toggle Rigid Bodies"
+    bl_description = "切换刚体/关节在视图中的显示/隐藏"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        visible = None
+        count = 0
+        for o in bpy.data.objects:
+            if o.rigid_body or (o.rigid_body_constraint and "胸" in o.name):
+                if visible is None:
+                    visible = o.hide_viewport
+                o.hide_viewport = not visible
+                count += 1
+            elif hasattr(o, 'mmd_type') and o.mmd_type in ('RIGID_BODY', 'JOINT_GRP_OBJ', 'RIGID_GRP_OBJ'):
+                if visible is None:
+                    visible = o.hide_viewport
+                o.hide_viewport = not visible
+                count += 1
+
+        state = "显示" if visible else "隐藏"
+        context.scene.rgba_mmd.last_status = f"刚体{state}: {count} objects"
+        self.report({'INFO'}, f"Rigid bodies: {state}")
+        return {'FINISHED'}
+
+
+_classes = (RGBAMMD_OT_detect, RGBAMMD_OT_apply, RGBAMMD_OT_remove,
+            RGBAMMD_OT_spring_sim, RGBAMMD_OT_clear_sim,
+            RGBAMMD_OT_export_pmx, RGBAMMD_OT_toggle_rigid_vis)
 
 
 def register():
