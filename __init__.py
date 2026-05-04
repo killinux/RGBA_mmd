@@ -1,7 +1,7 @@
 bl_info = {
     "name": "RGBA-Style MMD Bust Rig",
     "author": "RGBA-MMD addon (port of rgba.blog.jp/archives/10475373.html)",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),
     "blender": (3, 6, 0),
     "location": "View3D > N-Panel > RGBA MMD",
     "description": "Build the RGBA-style 5-rigid-body / 8-joint bust physics rig for any MMD model loaded via mmd_tools.",
