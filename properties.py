@@ -133,6 +133,28 @@ class RGBAMMDSettings(bpy.types.PropertyGroup):
         default=16, min=1, max=16,
     )
 
+    # Wiggle 2 parameters
+    wiggle_stiffness: FloatProperty(
+        name="Stiffness",
+        description="弹簧刚度：越高越硬，越低越软弹",
+        default=400.0, min=0.0, max=2000.0,
+    )
+    wiggle_damping: FloatProperty(
+        name="Damping",
+        description="阻尼：越高越快停止振荡",
+        default=0.6, min=0.0, max=10.0,
+    )
+    wiggle_mass: FloatProperty(
+        name="Mass",
+        description="质量：越大惯性越大晃动越重",
+        default=1.5, min=0.01, max=10.0,
+    )
+    wiggle_gravity: FloatProperty(
+        name="Gravity",
+        description="重力影响：0=无重力，1=标准重力",
+        default=0.8, min=0.0, max=5.0,
+    )
+
 
 def register():
     bpy.utils.register_class(RGBAMMDSettings)

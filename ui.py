@@ -120,6 +120,38 @@ class RGBAMMD_PT_rgba_rig(Panel):
         box.prop(s, "spring_damp")
 
 
+class RGBAMMD_PT_wiggle(Panel):
+    bl_label = "Wiggle 2 物理"
+    bl_idname = "RGBAMMD_PT_wiggle"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "RGBA MMD"
+    bl_parent_id = "RGBAMMD_PT_main"
+
+    def draw(self, context):
+        s = context.scene.rgba_mmd
+        layout = self.layout
+
+        has_wiggle = hasattr(context.scene, 'wiggle_enable')
+        if not has_wiggle:
+            layout.label(text="Wiggle 2 未安装", icon='ERROR')
+            layout.operator("wm.url_open", text="下载 Wiggle 2", icon='URL').url = "https://github.com/shteeve3d/blender-wiggle-2"
+            return
+
+        layout.label(text="骨骼级弹簧物理，实时预览", icon='INFO')
+
+        col = layout.column(align=True)
+        col.operator("rgba_mmd.wiggle_setup", icon="PLAY", text="一键配置胸部 Wiggle")
+        col.operator("rgba_mmd.wiggle_remove", icon="X", text="移除 Wiggle")
+        col.operator("rgba_mmd.wiggle_bake", icon="REC", text="烘焙到关键帧")
+
+        box = layout.box()
+        box.prop(s, "wiggle_stiffness")
+        box.prop(s, "wiggle_damping")
+        box.prop(s, "wiggle_mass")
+        box.prop(s, "wiggle_gravity")
+
+
 class RGBAMMD_PT_export(Panel):
     bl_label = "导出 PMX"
     bl_idname = "RGBAMMD_PT_export"
@@ -136,7 +168,7 @@ class RGBAMMD_PT_export(Panel):
 
 
 _classes = (RGBAMMD_PT_main, RGBAMMD_PT_simple, RGBAMMD_PT_spring_sim,
-            RGBAMMD_PT_rgba_rig, RGBAMMD_PT_export)
+            RGBAMMD_PT_wiggle, RGBAMMD_PT_rgba_rig, RGBAMMD_PT_export)
 
 
 def register():

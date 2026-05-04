@@ -530,10 +530,110 @@ class RGBAMMD_OT_remove_simple(Operator):
         return {'FINISHED'}
 
 
+class RGBAMMD_OT_wiggle_setup(Operator):
+    bl_idname = "rgba_mmd.wiggle_setup"
+    bl_label = "Setup Wiggle 2"
+    bl_description = "一键配置 Wiggle 2 胸部弹跳（需要先安装 Wiggle 2 插件）"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        s = context.scene.rgba_mmd
+
+        if not hasattr(context.scene, 'wiggle_enable'):
+            self.report({'ERROR'}, "Wiggle 2 未安装。请先从 GitHub 下载安装：\nhttps://github.com/shteeve3d/blender-wiggle-2")
+            s.last_status = "错误: Wiggle 2 未安装"
+            return {'CANCELLED'}
+
+        arm = next((o for o in bpy.data.objects if o.type == "ARMATURE"), None)
+        if arm is None:
+            self.report({'ERROR'}, "No armature found.")
+            return {'CANCELLED'}
+
+        bust_bones = rig_builder.detect_bust_bones(arm)
+        if not bust_bones:
+            self.report({'ERROR'}, "No bust bones detected. Run Detect first.")
+            return {'CANCELLED'}
+
+        context.scene.wiggle_enable = True
+        arm.wiggle_enable = True
+
+        count = 0
+        for bone_name, side in bust_bones:
+            bone = arm.pose.bones.get(bone_name)
+            if bone is None:
+                continue
+
+            bone.wiggle_enable = True
+            bone.wiggle_tail = True
+            bone.wiggle_stiff = s.wiggle_stiffness
+            bone.wiggle_damp = s.wiggle_damping
+            bone.wiggle_mass = s.wiggle_mass
+            bone.wiggle_gravity = s.wiggle_gravity
+            bone.wiggle_chain = False
+            count += 1
+
+        s.last_status = f"Wiggle 2: configured {count} bust bones (stiff={s.wiggle_stiffness}, damp={s.wiggle_damping}, mass={s.wiggle_mass})"
+        self.report({'INFO'}, s.last_status)
+        return {'FINISHED'}
+
+
+class RGBAMMD_OT_wiggle_remove(Operator):
+    bl_idname = "rgba_mmd.wiggle_remove"
+    bl_label = "Remove Wiggle"
+    bl_description = "移除胸部骨骼上的 Wiggle 2 配置"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        s = context.scene.rgba_mmd
+        arm = next((o for o in bpy.data.objects if o.type == "ARMATURE"), None)
+        if arm is None:
+            self.report({'ERROR'}, "No armature found.")
+            return {'CANCELLED'}
+
+        bust_bones = rig_builder.detect_bust_bones(arm)
+        count = 0
+        for bone_name, side in bust_bones:
+            bone = arm.pose.bones.get(bone_name)
+            if bone and hasattr(bone, 'wiggle_enable'):
+                bone.wiggle_enable = False
+                bone.wiggle_tail = False
+                bone.wiggle_head = False
+                count += 1
+
+        s.last_status = f"Wiggle removed from {count} bones"
+        self.report({'INFO'}, s.last_status)
+        return {'FINISHED'}
+
+
+class RGBAMMD_OT_wiggle_bake(Operator):
+    bl_idname = "rgba_mmd.wiggle_bake"
+    bl_label = "Bake Wiggle"
+    bl_description = "将 Wiggle 2 物理烘焙到关键帧"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        s = context.scene.rgba_mmd
+
+        if not hasattr(context.scene, 'wiggle_enable'):
+            self.report({'ERROR'}, "Wiggle 2 未安装。")
+            return {'CANCELLED'}
+
+        try:
+            bpy.ops.wiggle.bake()
+            s.last_status = "Wiggle baked to keyframes"
+            self.report({'INFO'}, s.last_status)
+            return {'FINISHED'}
+        except Exception as e:
+            self.report({'ERROR'}, f"Bake failed: {e}")
+            return {'CANCELLED'}
+
+
 _classes = (RGBAMMD_OT_detect, RGBAMMD_OT_apply, RGBAMMD_OT_remove,
             RGBAMMD_OT_spring_sim, RGBAMMD_OT_clear_sim,
             RGBAMMD_OT_export_pmx, RGBAMMD_OT_toggle_rigid_vis,
-            RGBAMMD_OT_simple_physics, RGBAMMD_OT_remove_simple)
+            RGBAMMD_OT_simple_physics, RGBAMMD_OT_remove_simple,
+            RGBAMMD_OT_wiggle_setup, RGBAMMD_OT_wiggle_remove,
+            RGBAMMD_OT_wiggle_bake)
 
 
 def register():
