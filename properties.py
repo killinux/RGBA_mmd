@@ -106,6 +106,33 @@ class RGBAMMDSettings(bpy.types.PropertyGroup):
         subtype='FILE_PATH',
     )
 
+    # Simple physics parameters (reference: Purifier Inase 18)
+    simple_mass: FloatProperty(
+        name="Mass",
+        description="胸部刚体质量",
+        default=1.0, min=0.01, max=10.0,
+    )
+    simple_damping: FloatProperty(
+        name="Damping",
+        description="线性/角度阻尼",
+        default=0.5, min=0.0, max=1.0,
+    )
+    simple_radius: FloatProperty(
+        name="Radius",
+        description="胸部刚体球半径",
+        default=0.6, min=0.01, max=2.0,
+    )
+    simple_angle_limit: FloatProperty(
+        name="Angle Limit (°)",
+        description="关节角度限制（度）",
+        default=10.0, min=1.0, max=90.0,
+    )
+    simple_collision_group: IntProperty(
+        name="Collision Group",
+        description="碰撞组（1-16）",
+        default=16, min=1, max=16,
+    )
+
 
 def register():
     bpy.utils.register_class(RGBAMMDSettings)

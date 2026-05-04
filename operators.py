@@ -360,9 +360,180 @@ class RGBAMMD_OT_toggle_rigid_vis(Operator):
         return {'FINISHED'}
 
 
+class RGBAMMD_OT_simple_physics(Operator):
+    bl_idname = "rgba_mmd.simple_physics"
+    bl_label = "Apply Simple Physics"
+    bl_description = "简单刚体：每侧 1 个动态球体 + 1 个关节（参考 Purifier Inase 18 方案，Blender 中有效）"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        import math
+        try:
+            from mmd_tools.core.model import Model
+        except ImportError:
+            self.report({'ERROR'}, "mmd_tools not installed.")
+            return {'CANCELLED'}
+
+        s = context.scene.rgba_mmd
+        root = rig_builder.find_mmd_root(context)
+        if root is None:
+            self.report({'ERROR'}, "No MMD model found.")
+            return {'CANCELLED'}
+        arm = rig_builder.find_armature(root)
+        if arm is None:
+            self.report({'ERROR'}, "No armature found.")
+            return {'CANCELLED'}
+        model = Model(root)
+
+        bust_bones = rig_builder.detect_bust_bones(arm)
+        if not bust_bones:
+            self.report({'ERROR'}, "No bust bones detected.")
+            return {'CANCELLED'}
+
+        parent_name = rig_builder.find_parent_bone(arm, s.parent_bone_name)
+        if not parent_name:
+            self.report({'ERROR'}, "No parent bone found.")
+            return {'CANCELLED'}
+
+        def bone_pos(name):
+            b = arm.data.bones[name]
+            return tuple(arm.matrix_world @ b.head_local)
+
+        grp = s.simple_collision_group - 1
+        mask = [True] * 16
+
+        parent_rb = None
+        for rb in model.rigidBodies():
+            if rb.mmd_rigid.bone == parent_name and rb.mmd_rigid.type == '0':
+                parent_rb = rb
+                break
+
+        if parent_rb is None:
+            parent_rb = model.createRigidBody(
+                name=f"{parent_name}_phys",
+                shape_type=2,
+                location=bone_pos(parent_name),
+                rotation=(0, 0, 0),
+                size=(1.0, 1.0, 0.0),
+                dynamics_type=0,
+                collision_group_number=0,
+                collision_group_mask=[True]*16,
+                bone=parent_name,
+                mass=1.0,
+                friction=0.5,
+                linear_damping=0.5,
+                angular_damping=0.5,
+            )
+
+        created_rb = 0
+        created_j = 0
+        ang_limit = math.radians(s.simple_angle_limit)
+
+        for bone_name, side in bust_bones:
+            suffix = f".{side}" if side else ""
+            rb_name = f"胸{suffix}" if side else bone_name
+
+            rb = model.createRigidBody(
+                name=rb_name,
+                shape_type=0,
+                location=bone_pos(bone_name),
+                rotation=(0, 0, 0),
+                size=(s.simple_radius, 0.0, 0.0),
+                dynamics_type=1,
+                collision_group_number=grp,
+                collision_group_mask=mask,
+                bone=bone_name,
+                mass=s.simple_mass,
+                friction=0.5,
+                linear_damping=s.simple_damping,
+                angular_damping=s.simple_damping,
+            )
+            created_rb += 1
+
+            model.createJoint(
+                name=f"J.{rb_name}",
+                rigid_a=parent_rb,
+                rigid_b=rb,
+                location=bone_pos(bone_name),
+                rotation=(0, 0, 0),
+                maximum_location=(0, 0, 0),
+                minimum_location=(0, 0, 0),
+                maximum_rotation=(ang_limit, ang_limit, ang_limit),
+                minimum_rotation=(-ang_limit, -ang_limit, -ang_limit),
+                spring_linear=(0, 0, 0),
+                spring_angular=(0, 0, 0),
+            )
+            created_j += 1
+
+        bpy.context.view_layer.objects.active = root
+        bpy.ops.mmd_tools.build_rig()
+
+        w = context.scene.rigidbody_world
+        if w is None:
+            bpy.ops.rigidbody.world_add()
+            w = context.scene.rigidbody_world
+        w.enabled = True
+
+        s.last_status = f"Simple physics: {created_rb} rigids + {created_j} joints (type=1 Dynamic, ±{s.simple_angle_limit}°, no spring)"
+        self.report({'INFO'}, s.last_status)
+        return {'FINISHED'}
+
+
+class RGBAMMD_OT_remove_simple(Operator):
+    bl_idname = "rgba_mmd.remove_simple"
+    bl_label = "Remove Simple Physics"
+    bl_description = "移除简单刚体物理并清理追踪"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        try:
+            from mmd_tools.core.model import Model
+        except ImportError:
+            self.report({'ERROR'}, "mmd_tools not installed.")
+            return {'CANCELLED'}
+
+        s = context.scene.rgba_mmd
+        root = rig_builder.find_mmd_root(context)
+        if root is None:
+            self.report({'ERROR'}, "No MMD model found.")
+            return {'CANCELLED'}
+        arm = rig_builder.find_armature(root)
+        model = Model(root)
+
+        bpy.context.view_layer.objects.active = root
+        try:
+            bpy.ops.mmd_tools.clean_rig()
+        except Exception:
+            pass
+
+        removed = 0
+        for rb in list(model.rigidBodies()):
+            bpy.data.objects.remove(rb, do_unlink=True)
+            removed += 1
+        for j in list(model.joints()):
+            bpy.data.objects.remove(j, do_unlink=True)
+            removed += 1
+
+        if arm:
+            for bone in arm.pose.bones:
+                for c in list(bone.constraints):
+                    if "mmd_tools_rigid" in c.name:
+                        bone.constraints.remove(c)
+
+        for o in list(bpy.data.objects):
+            if "mmd_bonetrack" in o.name or "mmd_tools_rigid" in o.name:
+                bpy.data.objects.remove(o, do_unlink=True)
+                removed += 1
+
+        s.last_status = f"Removed {removed} physics objects"
+        self.report({'INFO'}, s.last_status)
+        return {'FINISHED'}
+
+
 _classes = (RGBAMMD_OT_detect, RGBAMMD_OT_apply, RGBAMMD_OT_remove,
             RGBAMMD_OT_spring_sim, RGBAMMD_OT_clear_sim,
-            RGBAMMD_OT_export_pmx, RGBAMMD_OT_toggle_rigid_vis)
+            RGBAMMD_OT_export_pmx, RGBAMMD_OT_toggle_rigid_vis,
+            RGBAMMD_OT_simple_physics, RGBAMMD_OT_remove_simple)
 
 
 def register():
