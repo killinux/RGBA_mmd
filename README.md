@@ -1,115 +1,114 @@
-# RGBA-Style MMD Bust Rig (Blender addon)
+# RGBA 式 MMD 胸部物理绑定（Blender 插件）
 
-Reproduces the **"RGBA式おっぱい剛体 Ver1.5β"** physics rig from
-<https://rgba.blog.jp/archives/10475373.html> inside Blender, on top of
-**mmd_tools**. Works on any MMD model loaded via mmd_tools.
+在 Blender 中复现 **"RGBA式おっぱい剛体 Ver1.5β"** 物理绑定方案，基于 **mmd_tools**。
 
-## Requirements
+原始参考：<https://rgba.blog.jp/archives/10475373.html>
 
-- Blender 3.6 LTS or newer (tested on 3.6.15).
-- **mmd_tools** addon installed and enabled (any modern build; tested on 1.0.2).
-- An MMD model imported into the scene (mmd_tools creates the `mmd_root` empty
-  and the bone names this addon detects).
+## 环境要求
 
-## Install
+- Blender 3.6 LTS 或更新版本（已在 3.6.15 上测试）
+- **mmd_tools** 插件已安装并启用（已在 1.0.2 上测试）
+- 通过 mmd_tools 导入的 MMD 模型
 
-1. Compress the `RGBA_mmd/` folder into `RGBA_mmd.zip`.
-2. Blender → *Edit* → *Preferences* → *Add-ons* → *Install...* → pick the zip.
-3. Tick **RGBA-Style MMD Bust Rig** in the list.
+## 安装
 
-## Usage
+1. 将 `RGBA_mmd/` 文件夹压缩为 `RGBA_mmd.zip`
+2. Blender → 编辑 → 偏好设置 → 插件 → 安装 → 选择 zip 文件
+3. 勾选启用 **RGBA-Style MMD Bust Rig**
 
-1. Click any object inside your MMD model (mesh, bone, root empty — anything).
-2. Open the 3D View N-panel → **RGBA MMD** tab.
-3. *Detect* — verifies that bust bones and the parent bone (`上半身2`) are found.
-4. *Apply RGBA Rig* — creates 5 rigid bodies + 8 joints per side under the
-   model's `rigidbodies` / `joints` empties.
-5. Press the *Play* button in the timeline; the chest should oscillate naturally
-   under the model's own movement.
+## 使用方法
 
-To revert: *Remove RGBA Rig* deletes only the objects this addon created
-(matched by their `胸_…` / `_RGBAanchor` name pattern).
+1. 选中 MMD 模型内的任意对象（网格、骨骼、根 Empty 均可）
+2. 打开 3D 视图 N 面板 → **RGBA MMD** 标签
+3. **检测（Detect）**：验证是否找到胸部骨骼和父骨骼（`上半身2`）
+4. **应用（Apply RGBA Rig）**：每侧创建 5 个刚体 + 8 个关节
+5. 在时间轴按播放键，胸部应随模型运动自然晃动
 
-## What it builds, per side
+撤销：**移除（Remove RGBA Rig）** 只删除本插件创建的对象（按 `胸_…` / `_RGBAanchor` 名称匹配）。
 
-| Object | Role | Dynamics | Bone link |
-|---|---|---|---|
-| `胸.L`           | main visible bust body | DYNAMIC + bone | bust bone |
-| `胸_後.L`        | translation lock helper | DYNAMIC | none |
-| `胸_前.L`        | rotation helper | DYNAMIC | none |
-| `胸_回転.L`      | rotation dummy | DYNAMIC | none |
-| `胸_前後.L`      | front/back helper | DYNAMIC | none |
-| `J.胸_後1.L`, `J.胸_後2.L`     | rigid–helper–main bind, all axes locked | – | – |
-| `J.胸_前1.L`, `J.胸_前2.L`     | rotation chain | – | – |
-| `J.胸_回転1.L`, `J.胸_回転2.L` | rotation chain | – | – |
-| `J.胸_前後1.L`, `J.胸_前後2.L` | front/back chain (Y free) | – | – |
+## 每侧构建的对象
 
-(Mirror set with `.R` for the right side. Suffix style — `.L`/`.R`,
-`左`/`右`, etc. — is mirrored from your model's existing bone names where
-possible.)
+| 对象 | 作用 | 动力学类型 | 骨骼绑定 |
+|------|------|-----------|---------|
+| `胸.L` | 主胸部刚�� | 动态+骨骼 | 胸部骨骼 |
+| `胸_後.L` | 位移锁定辅助体 | 动态 | 无 |
+| `胸_前.L` | 旋转辅助体 | 动态 | 无 |
+| `胸_回転.L` | 旋转虚拟体 | 动态 | 无 |
+| `胸_前後.L` | 前后移动辅助体 | 动态 | 无 |
+| `J.胸_後1/2.L` | 刚体-辅助体绑定��全轴锁定 | - | - |
+| `J.胸_前1/2.L` | 旋转链 | - | - |
+| `J.胸_回転1/2.L` | 旋转链 | - | - |
+| `J.胸_前後1/2.L` | 前后链（Y 轴自由） | - | - |
 
-All RGBA bodies live in **MMD collision group 15** (configurable) with the
-"collide with nothing" mask, so they don't interfere with the rest of the
-model's physics.
+右侧对称生成（`.R`）。后缀风格（`.L`/`.R`、`左`/`右` 等）自动匹配模型现有骨骼命名。
 
-## Bust bone detection
+所有 RGBA 刚体位于 **MMD 碰撞组 15**（可配置），碰撞掩码设为"不与任何物体碰撞"，不干扰模型原有物理。
 
-Matches any bone whose name contains:
+## 胸部骨骼检测
 
-- Japanese: `胸`, `乳`
-- English: `bust`, `breast`, `chest`, `boob`, `oppai`, `tit`
+匹配名称包含以下关键字的骨骼：
 
-If the model has a chain (e.g. `胸親` → `胸先`, or `boob left 1` → `boob left 2`),
-the addon drives the **parent** of the chain only. Children of bust bones are
-skipped automatically.
+- 日文：`胸`、`乳`
+- 英文：`bust`、`breast`、`chest`、`boob`、`oppai`、`tit`
 
-The parent anchor bone defaults to `上半身2`, falling back to `上半身`. Override
-in the panel's *Parent Bone* field if your model uses different names.
+如果模型有��骼链（如 `胸親` → `胸先`，或 `boob left 1` → `boob left 2`），插件只驱动链的**父骨骼**，子骨骼自动跳过。
 
-## Tunables (panel)
+父锚点骨骼默认为 `上半身2`，回退到 `上半身`。可在面板��"Parent Bone"字段手动指定。
 
-- **Body Radius** — sphere size of the main bust rigid; auxiliaries are 0.4×.
-- **Main / Aux Mass** — physical mass.
-- **Linear / Angular Damping** — Bullet damping per body (blog suggests 0.5–0.999).
-- **Strong / Loose Spring k** — spring stiffness for locked vs free joints.
-- **Spring Damping** — joint spring damping.
-- **Collision Group** — 1–16 (UI numbering); the mask is auto-set to "no collisions".
+## 可调参数（面板）
 
-## Verified end-to-end
+| 参数 | 说明 |
+|------|------|
+| **Body Radius** | 主胸部刚体球半径，辅助体为 0.4 倍 |
+| **Main / Aux Mass** | 主/辅助刚体质量 |
+| **Linear / Angular Damping** | Bullet 线性/角度阻尼（博客建议 0.5~0.999） |
+| **Strong / Loose Spring k** | 锁定轴/自由轴的弹簧刚度 |
+| **Spring Damping** | 关节弹簧阻尼 |
+| **Collision Group** | ��撞组 1~16，掩码自动设为"无碰撞" |
+| **Position Along Bone** | 刚体沿骨骼的位置（0=骨头，0.5=中点，1=尾端） |
+| **Z / Y Offset** | 手动微调刚体在世界 Z/Y 方向的偏移 |
+| **Overwrite Existing** | 若已有同名刚体/关节，删除并重建 |
 
-Tested on Blender 3.6.15 + mmd_tools 1.0.2 with an MMD model that has bust bones
-named `boob left 1` / `boob right 1` (parent: `上半身2`):
+## 重要说明：Blender 物理的局限性
 
-- *Apply RGBA Rig* creates 11 rigid bodies + 16 joints (5 + 8 per side, plus 1
-  shared parent anchor `上半身2_RGBAanchor`).
-- After applying, animate `上半身2` (e.g. rotate on X over 30 frames). The chest
-  rigid body lags the upper body by ~1 frame and oscillates ±0.05–0.5m in Z.
-- `mmd_bonetrack` (mmd_tools' bone-tracking empty) picks up rotation and feeds
-  it back into the bust bone via its existing `COPY_ROTATION` constraint
-  (`mmd_tools_rigid_track`).
+原版 RGBA 方案依赖 MMD Bullet 求解器的**"零限制技巧"**——关节限制设为 0 时，求解器精度误差产生微小振荡形成弹跳效果。
 
-If you don't see bouncing on playback:
+**此技巧在 Blender 中不适用**，因为 Blender 的 Bullet 实现更精确，零限制不会产生振荡。
 
-1. Make sure the **scene has a rigid body world** (Properties → Scene → Rigid
-   Body World). The addon creates one if missing, but it can be removed by undo.
-2. Make sure the **world is enabled** and the cache range covers your timeline.
-3. Make sure something is **animating the upper body** — the bust bones jiggle in
-   reaction to motion. With a static pose nothing happens.
-4. If the bodies fall under gravity instead of staying anchored, raise *Strong
-   Spring k* (default 5000). With Bullet, you typically need 1000–10000× the
-   PMX equivalent.
+### 推荐替代方案：数学弹���模拟
 
-## Caveats
+绕过 Blender 物理系统，用数学弹簧-阻尼器模拟计算弹跳，直接烘焙到骨骼关键帧：
 
-- The original RGBA technique relies on small inaccuracies in Bullet's
-  zero-limit constraint — settings that work on PMXEditor's Bullet may need
-  tweaking in Blender. If the bust doesn't visibly bounce, raise *Loose Spring k*
-  or lower *Damping*.
-- If your model's bust bones don't match the keyword list, rename them or add
-  a manual mapping in `rig_builder.py` (`BUST_KEYWORDS_*`).
-- This addon does not delete or modify any rigid body / joint it didn't create
-  unless you tick *Overwrite Existing*.
+```python
+SPRING_K = 80.0    # 弹簧刚度（越低越松，摆幅越大）
+DAMPING  = 6.0     # 阻尼系��（越低振荡越久）
+MASS     = 1.0     # 质量（越大反应越迟钝）
+SCALE    = 3.0     # 结果放大倍数
+```
 
-## License
+| 效果 | SPRING_K | DAMPING | MASS | SCALE |
+|------|----------|---------|------|-------|
+| 慢摆荡（ゆっさゆっさ） | 40~60 | 6~8 | 1.5~2.0 | 2~3 |
+| 蓬松弹（ふわふわ） | 80~100 | 3~4 | 1.0 | 2~3 |
+| 写实/收敛 | 100~150 | 10~15 | 1.0 | 1.5~2.0 |
+| 夸张 | 60~80 | 4~6 | 1.0 | 4~5 |
 
-MIT — do whatever, just don't blame us when bones explode.
+## 故障排除
+
+如果播放时看不到弹跳效果：
+
+1. 确保场景有**刚体世界**（属性 → 场景 → 刚体世界）。插件会自动创建，但撤销操作可能删除
+2. 确保刚体世界**已��用**且缓存��围覆盖时间轴
+3. 确保有**动画驱动上半身运动**——胸部骨骼是对运动的反应，静止姿势不会产生弹跳
+4. 如果刚体下落而非锚定，提高 Strong Spring k（默认 5000）
+5. 如果以上都不行，**使用数学弹簧模拟方案**（见上文）
+
+## 注意事项
+
+- Blender 的 Bullet 实现与 PMXEditor 不同，PMXEditor 中有效的参数在 Blender 中可能需要调整
+- 如果模型的胸部骨骼名称不在关键字列表中，请重命名或在 `rig_builder.py` 的 `BUST_KEYWORDS_*` 中添加
+- 除非勾选 Overwrite Existing，本插件不会删除或修改非自身创建的刚体/关节
+
+## 许可证
+
+MIT
